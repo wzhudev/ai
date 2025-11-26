@@ -14,3 +14,4 @@ streamText 说明
 - 移植到 golang 需要做哪些变动
     - 不需要做 provider 抽象，暂时只支持 openai compatible API
     - JavaScript Stream API 需要改成 channel
+    - 是否可以减少一些中间类型的定义
