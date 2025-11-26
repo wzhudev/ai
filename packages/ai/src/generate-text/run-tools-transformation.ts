@@ -79,6 +79,7 @@ export type SingleRequestTextStreamPart<TOOLS extends ToolSet> =
       id: string;
       providerMetadata?: ProviderMetadata;
     }
+  // 多了一个 approval request output
   | ToolApprovalRequestOutput<TOOLS>
 
   // Other types:
@@ -262,6 +263,8 @@ export function runToolsTransformation<TOOLS extends ToolSet>({
               });
             }
 
+            // 如果检查到需要审批，则发送审批请求并中断后续执行
+            // 当 LLM 输出 toolcall 时，流也会结束
             if (
               await isApprovalNeeded({
                 tool,
@@ -272,9 +275,11 @@ export function runToolsTransformation<TOOLS extends ToolSet>({
             ) {
               toolResultsStreamController!.enqueue({
                 type: 'tool-approval-request',
-                approvalId: generateId(),
+                approvalId: generateId(), // 这里生成一个 approvalId
                 toolCall,
               });
+
+              // 这里中断了后续的工具执行流程
               break;
             }
 

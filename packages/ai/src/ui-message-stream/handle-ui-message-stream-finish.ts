@@ -69,6 +69,7 @@ export function handleUIMessageStreamFinish<UI_MESSAGE extends UIMessage>({
     }),
   );
 
+  // onFinish 决定了要不要走后面那些复杂的逻辑
   if (onFinish == null) {
     return idInjectedStream;
   }

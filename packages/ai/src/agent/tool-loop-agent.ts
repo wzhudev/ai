@@ -59,7 +59,7 @@ export class ToolLoopAgent<
   > {
     const baseCallArgs = {
       ...this.settings,
-      stopWhen: this.settings.stopWhen ?? stepCountIs(20),
+      stopWhen: this.settings.stopWhen ?? stepCountIs(20), // Agent 默认迭代 20 步，超过了则停止
       ...options,
     };
 
@@ -94,6 +94,8 @@ export class ToolLoopAgent<
   /**
    * Streams an output from the agent (streaming).
    */
+  // Agent 实际上没作什么事情，主要就是把一些配置存储在 this.settings 里
+  // 供反复调用的 generateText 和 streamText 使用
   async stream({
     abortSignal,
     ...options

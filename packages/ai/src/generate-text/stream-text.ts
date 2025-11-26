@@ -136,14 +136,14 @@ export type StreamTextOnChunkCallback<TOOLS extends ToolSet> = (event: {
     TextStreamPart<TOOLS>,
     {
       type:
-        | 'text-delta'
-        | 'reasoning-delta'
-        | 'source'
-        | 'tool-call'
-        | 'tool-input-start'
-        | 'tool-input-delta'
-        | 'tool-result'
-        | 'raw';
+      | 'text-delta'
+      | 'reasoning-delta'
+      | 'source'
+      | 'tool-call'
+      | 'tool-input-start'
+      | 'tool-input-delta'
+      | 'tool-result'
+      | 'raw';
     }
   >;
 }) => PromiseLike<void> | void;
@@ -237,7 +237,7 @@ export function streamText<
   maxRetries,
   abortSignal,
   headers,
-  stopWhen = stepCountIs(1),
+  stopWhen = stepCountIs(1), // NOTE: 在默认情况下是一个一步的停止条件，那估计如果是 Agent 就是多步骤的
   experimental_output,
   output = experimental_output,
   experimental_telemetry: telemetry,
@@ -287,8 +287,8 @@ When the condition is an array, any of the conditions can be met to stop the gen
 @default stepCountIs(1)
      */
     stopWhen?:
-      | StopCondition<NoInfer<TOOLS>>
-      | Array<StopCondition<NoInfer<TOOLS>>>;
+    | StopCondition<NoInfer<TOOLS>>
+    | Array<StopCondition<NoInfer<TOOLS>>>;
 
     /**
 Optional telemetry configuration (experimental).
@@ -349,8 +349,8 @@ They are applied in the order they are provided.
 The stream transformations must maintain the stream structure for streamText to work correctly.
      */
     experimental_transform?:
-      | StreamTextTransform<TOOLS>
-      | Array<StreamTextTransform<TOOLS>>;
+    | StreamTextTransform<TOOLS>
+    | Array<StreamTextTransform<TOOLS>>;
 
     /**
 Custom download function to use for URLs.
@@ -549,8 +549,7 @@ function createOutputTransformStream<
 }
 
 class DefaultStreamTextResult<TOOLS extends ToolSet, OUTPUT extends Output>
-  implements StreamTextResult<TOOLS, OUTPUT>
-{
+  implements StreamTextResult<TOOLS, OUTPUT> {
   private readonly _totalUsage = new DelayedPromise<
     Awaited<StreamTextResult<TOOLS, OUTPUT>['usage']>
   >();
@@ -677,6 +676,7 @@ class DefaultStreamTextResult<TOOLS extends ToolSet, OUTPUT extends Output>
       }
     > = {};
 
+    // 这个 stream processor 负责回调事件
     const eventProcessor = new TransformStream<
       EnrichedStreamPart<TOOLS, InferPartialOutput<OUTPUT>>,
       EnrichedStreamPart<TOOLS, InferPartialOutput<OUTPUT>>
@@ -965,11 +965,13 @@ class DefaultStreamTextResult<TOOLS extends ToolSet, OUTPUT extends Output>
       },
     });
 
+    // 这个 stream 可以替换上游的 stream 让下游以为自己订阅的同一个流
     // initialize the stitchable stream and the transformed stream:
     const stitchableStream = createStitchableStream<TextStreamPart<TOOLS>>();
     this.addStream = stitchableStream.addStream;
     this.closeStream = stitchableStream.close;
 
+    // 订阅并且添加错误处理逻辑
     // resilient stream that handles abort signals and errors:
     const reader = stitchableStream.stream.getReader();
     let stream = new ReadableStream<TextStreamPart<TOOLS>>({
@@ -1014,6 +1016,7 @@ class DefaultStreamTextResult<TOOLS extends ToolSet, OUTPUT extends Output>
       },
     });
 
+    // 添加自定义的转换流
     // transform the stream before output parsing
     // to enable replacement of stream segments:
     for (const transform of transforms) {
@@ -1027,9 +1030,10 @@ class DefaultStreamTextResult<TOOLS extends ToolSet, OUTPUT extends Output>
       );
     }
 
+    // 最终形成这个流将会被下游使用
     this.baseStream = stream
-      .pipeThrough(createOutputTransformStream(output ?? text()))
-      .pipeThrough(eventProcessor);
+      .pipeThrough(createOutputTransformStream(output ?? text())) // 这里处理 tool 相关的流
+      .pipeThrough(eventProcessor); // 然后处理事件回调的流
 
     const { maxRetries, retry } = prepareRetries({
       maxRetries: maxRetriesArg,
@@ -1079,6 +1083,8 @@ class DefaultStreamTextResult<TOOLS extends ToolSet, OUTPUT extends Output>
         const { approvedToolApprovals, deniedToolApprovals } =
           collectToolApprovals<TOOLS>({ messages: initialMessages });
 
+        // 每次被调用的时候，先检查有没有需要执行的 tool call，这里主要是处理
+        // tool approval & tool denied
         // initial tool execution step stream
         if (
           deniedToolApprovals.length > 0 ||
@@ -1095,6 +1101,7 @@ class DefaultStreamTextResult<TOOLS extends ToolSet, OUTPUT extends Output>
             },
           });
 
+          // 把工具流添加到整体的流处理中
           self.addStream(toolExecutionStepStream);
 
           try {
@@ -1166,6 +1173,7 @@ class DefaultStreamTextResult<TOOLS extends ToolSet, OUTPUT extends Output>
 
         recordedResponseMessages.push(...initialResponseMessages);
 
+        // 这里是一个步骤调用的业务逻辑
         async function streamStep({
           currentStep,
           responseMessages,
@@ -1208,6 +1216,7 @@ class DefaultStreamTextResult<TOOLS extends ToolSet, OUTPUT extends Output>
               activeTools: prepareStepResult?.activeTools ?? activeTools,
             });
 
+          // 这里调用 model provider 形成 step 流
           const {
             result: { stream, response, request },
             doStreamSpan,
@@ -1275,6 +1284,7 @@ class DefaultStreamTextResult<TOOLS extends ToolSet, OUTPUT extends Output>
             }),
           );
 
+          // 将 tool 结果整合到流中
           const streamWithToolResults = runToolsTransformation({
             tools,
             generatorStream: stream,
@@ -1312,6 +1322,7 @@ class DefaultStreamTextResult<TOOLS extends ToolSet, OUTPUT extends Output>
           // raw text as it comes from the provider. recorded for telemetry.
           let activeText = '';
 
+          // 内部进行一次转换，然后把这个流添加到整体的流处理中
           self.addStream(
             streamWithToolResults.pipeThrough(
               new TransformStream<
@@ -1634,6 +1645,7 @@ class DefaultStreamTextResult<TOOLS extends ToolSet, OUTPUT extends Output>
           );
         }
 
+        // 启动第一步
         // add the initial stream to the stitchable stream
         await streamStep({
           currentStep: 0,
@@ -1865,9 +1877,9 @@ However, the LLM results are expected to be small enough to not cause issues.
     const responseMessageId =
       generateMessageId != null
         ? getResponseUIMessageId({
-            originalMessages,
-            responseMessageId: generateMessageId,
-          })
+          originalMessages,
+          responseMessageId: generateMessageId,
+        })
         : undefined;
 
     // TODO simplify once dynamic is no longer needed for invalid tool inputs
