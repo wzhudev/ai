@@ -1,9 +1,14 @@
 import { weatherToolWithApproval } from '@/tool/weather-tool-with-approval';
-import { anthropic } from '@ai-sdk/anthropic';
 import { ToolLoopAgent, InferAgentUIMessage } from 'ai';
 
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+
+const openRouter = createOpenRouter({
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+
 export const weatherWithApprovalAgent = new ToolLoopAgent({
-  model: anthropic('claude-sonnet-4-5'),
+  model: openRouter.chat('Qwen/Qwen3-VL-235B-A22B-Instruct'),
   // context engineering required to make sure the model does not retry
   // the tool execution if it is not approved:
   instructions:
