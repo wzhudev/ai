@@ -12,6 +12,7 @@ import WeatherWithApprovalView from '@/components/tool/weather-with-approval-vie
 export default function TestToolApproval() {
   const { status, sendMessage, messages, addToolApprovalResponse } =
     useChat<WeatherWithApprovalAgentUIMessage>({
+      // transport: new DefaultChatTransport({ api: '/api/chat-tool-approval' }),
       transport: new DefaultChatTransport({ api: 'http://localhost:8080/chat' }),
       sendAutomaticallyWhen:
         lastAssistantMessageIsCompleteWithApprovalResponses,

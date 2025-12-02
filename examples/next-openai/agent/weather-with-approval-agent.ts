@@ -4,6 +4,7 @@ import { ToolLoopAgent, InferAgentUIMessage } from 'ai';
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 
 const openRouter = createOpenRouter({
+  // eslint-disable-next-line turbo/no-undeclared-env-vars
   apiKey: process.env.OPENROUTER_API_KEY,
 });
 
